@@ -8,8 +8,10 @@ import androidx.work.WorkManager
 import com.m3u.data.database.model.Channel
 import com.m3u.data.database.model.DataSource
 import com.m3u.data.database.model.Playlist
+import com.m3u.data.database.model.Programme
 import com.m3u.data.repository.channel.ChannelRepository
 import com.m3u.data.repository.playlist.PlaylistRepository
+import com.m3u.data.repository.programme.ProgrammeRepository
 import com.m3u.data.repository.tv.TvRepository
 import com.m3u.data.service.DPadReactionService
 import com.m3u.data.service.MediaCommand
@@ -36,6 +38,7 @@ data class TvUiState(
     val recent: Channel? = null,
     val loadingChannels: Boolean = false,
     val selectedCategory: String? = null,
+    val currentProgramme: Programme? = null,
 ) {
     val channelCount: Int get() = counts.values.sum()
     val heroChannel: Channel? get() = recent ?: channels.firstOrNull()
@@ -61,6 +64,7 @@ class TvHomeViewModel @Inject constructor(
     private val playlistRepository: PlaylistRepository,
     private val channelRepository: ChannelRepository,
     private val playerManager: PlayerManager,
+    private val programmeRepository: ProgrammeRepository,
     private val workManager: WorkManager,
     tvRepository: TvRepository,
     dPadReactionService: DPadReactionService
@@ -80,6 +84,7 @@ class TvHomeViewModel @Inject constructor(
         observePlaylists()
         observeFavorites()
         observeRecent()
+        observeCurrentProgramme()
     }
 
     fun selectPlaylist(playlist: Playlist) {
@@ -185,6 +190,17 @@ class TvHomeViewModel @Inject constructor(
         viewModelScope.launch {
             channelRepository.observePlayedRecently().collect { recent ->
                 _state.update { it.copy(recent = recent) }
+            }
+        }
+    }
+
+    private fun observeCurrentProgramme() {
+        viewModelScope.launch {
+            currentChannel.collect { channel ->
+                val programme = channel?.let {
+                    programmeRepository.getProgrammeCurrently(it.id)
+                }
+                _state.update { it.copy(currentProgramme = programme) }
             }
         }
     }

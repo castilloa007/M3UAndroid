@@ -37,9 +37,11 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
@@ -76,11 +78,170 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import com.m3u.core.foundation.util.basic.title
 import com.m3u.data.database.model.Channel
 import com.m3u.data.database.model.Playlist
+import com.m3u.data.database.model.Programme
 import com.m3u.i18n.R.string
 import kotlinx.coroutines.yield
+import androidx.media3.common.Player
+import androidx.media3.ui.compose.PlayerSurface
+import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+@Composable
+fun EpgOverlayScreen(
+    player: Player?,
+    currentChannel: com.m3u.data.database.model.Channel?,
+    currentProgramme: Programme?,
+    channels: List<com.m3u.data.database.model.Channel>,
+    onSelectChannel: (com.m3u.data.database.model.Channel) -> Unit,
+    onToggleFavorite: (com.m3u.data.database.model.Channel) -> Unit,
+    onClose: () -> Unit,
+) {
+    val timeFmt = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.88f))
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+
+            // ── Top strip: mini PiP + current programme info ─────────────
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalAlignment = Alignment.Top,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(TvColors.Surface.copy(alpha = 0.9f))
+                    .padding(16.dp)
+            ) {
+                // Mini PiP
+                Box(
+                    modifier = Modifier
+                        .width(256.dp)
+                        .height(144.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.Black)
+                        .border(BorderStroke(2.dp, TvColors.Focus.copy(alpha = 0.6f)), RoundedCornerShape(8.dp))
+                ) {
+                    if (player != null) {
+                        PlayerSurface(
+                            player = player,
+                            surfaceType = SURFACE_TYPE_TEXTURE_VIEW,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+
+                // Programme info
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.weight(1f).padding(top = 4.dp)
+                ) {
+                    Text(
+                        text = currentChannel?.title.orEmpty(),
+                        color = TvColors.TextPrimary,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = TvFonts.Body,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (currentProgramme != null) {
+                        Text(
+                            text = currentProgramme.title,
+                            color = TvColors.Focus,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                            fontFamily = TvFonts.Body,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        val timeRange = remember(currentProgramme.start, currentProgramme.end) {
+                            "${timeFmt.format(Date(currentProgramme.start))} – ${timeFmt.format(Date(currentProgramme.end))}"
+                        }
+                        Text(
+                            text = timeRange,
+                            color = TvColors.TextSecondary,
+                            fontSize = 13.sp,
+                            fontFamily = TvFonts.Body
+                        )
+                        if (currentProgramme.description.isNotBlank()) {
+                            Text(
+                                text = currentProgramme.description,
+                                color = TvColors.TextMuted,
+                                fontSize = 12.sp,
+                                fontFamily = TvFonts.Body,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = "No programme information available",
+                            color = TvColors.TextMuted,
+                            fontSize = 13.sp,
+                            fontFamily = TvFonts.Body
+                        )
+                    }
+                }
+
+                // Close hint
+                FocusFrame(
+                    onClick = onClose,
+                    shape = RoundedCornerShape(8.dp),
+                    focusedScale = 1f,
+                    modifier = Modifier.size(40.dp)
+                ) { focused ->
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Close",
+                        tint = if (focused) TvColors.OnFocus else TvColors.TextMuted,
+                        modifier = Modifier.size(20.dp).align(Alignment.Center)
+                    )
+                }
+            }
+
+            // ── Divider ───────────────────────────────────────────────────
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(TvColors.Focus.copy(alpha = 0.3f))
+            )
+
+            // ── Channel list ──────────────────────────────────────────────
+            Text(
+                text = "CHANNELS IN THIS CATEGORY",
+                color = TvColors.TextMuted,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = TvFonts.Body,
+                letterSpacing = 1.5.sp,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)
+            )
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                modifier = Modifier.fillMaxSize().focusGroup()
+            ) {
+                itemsIndexed(channels, key = { _, ch -> ch.id }) { _, channel ->
+                    ChannelListItem(
+                        channel = channel,
+                        selected = channel.id == currentChannel?.id,
+                        onClick = { onSelectChannel(channel) },
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun TvBrowsePane(
@@ -149,7 +310,11 @@ private fun GuideScreen(
     val searchFocusRequester = remember { FocusRequester() }
     var initialFocusRequested by remember { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
-    var sidebarMode by rememberSaveable { mutableStateOf(false) } // true = search active
+    var sidebarMode by rememberSaveable { mutableStateOf(false) }
+    var selectedChannel by remember { mutableStateOf<Channel?>(null) }
+
+    // Reset selection when category/search changes
+    LaunchedEffect(state.selectedCategory, searchQuery) { selectedChannel = null }
 
     val displayedChannels = remember(state.visibleChannels, searchQuery, sidebarMode) {
         if (sidebarMode && searchQuery.isNotBlank()) {
@@ -173,34 +338,28 @@ private fun GuideScreen(
             .fillMaxSize()
             .focusGroup()
     ) {
-        // ── Left: category sidebar ──────────────────────────────────────
+        // ── Col 1: category sidebar ─────────────────────────────────────
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(4.dp),
             contentPadding = PaddingValues(vertical = 16.dp, horizontal = 12.dp),
             modifier = Modifier
-                .width(236.dp)
+                .width(220.dp)
                 .fillMaxHeight()
                 .background(TvColors.Surface.copy(alpha = 0.72f))
                 .focusGroup()
         ) {
-            // ── Search entry ───────────────────────────────────────────
             item(key = CATEGORY_SEARCH) {
                 SearchSidebarEntry(
                     query = searchQuery,
                     active = sidebarMode,
                     focusRequester = firstCategoryFocusRequester,
-                    onActivate = {
-                        sidebarMode = true
-                        searchFocusRequester.requestFocus()
-                    },
+                    onActivate = { sidebarMode = true; searchFocusRequester.requestFocus() },
                     onQueryChange = { searchQuery = it },
                     onClear = { searchQuery = ""; sidebarMode = false },
                     searchFocusRequester = searchFocusRequester,
                 )
                 Spacer(Modifier.height(8.dp))
             }
-
-            // ── Category list ──────────────────────────────────────────
             val allCategories = buildList {
                 add(TvUiState.CATEGORY_FAVORITES to "⭐  Favorites")
                 add(TvUiState.CATEGORY_ALL to "📺  All Channels")
@@ -216,8 +375,7 @@ private fun GuideScreen(
                 }
                 FocusFrame(
                     onClick = {
-                        sidebarMode = false
-                        searchQuery = ""
+                        sidebarMode = false; searchQuery = ""
                         onSelectCategory(if (key == TvUiState.CATEGORY_ALL) null else key)
                     },
                     selected = isSelected,
@@ -227,10 +385,7 @@ private fun GuideScreen(
                 ) { focused ->
                     Text(
                         text = label,
-                        color = when {
-                            focused || isSelected -> TvColors.OnFocus
-                            else -> TvColors.TextPrimary
-                        },
+                        color = if (focused || isSelected) TvColors.OnFocus else TvColors.TextPrimary,
                         fontSize = 13.sp,
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                         fontFamily = TvFonts.Body,
@@ -243,54 +398,339 @@ private fun GuideScreen(
             }
         }
 
-        // ── Right: channel list ─────────────────────────────────────────
-        Column(modifier = Modifier.fillMaxSize()) {
-            // header row
+        // ── Col 2: channel list ─────────────────────────────────────────
+        Column(
+            modifier = Modifier
+                .width(290.dp)
+                .fillMaxHeight()
+                .background(TvColors.BackgroundSoft)
+        ) {
             val headerText = when {
-                sidebarMode && searchQuery.isNotBlank() ->
-                    "Search: \"$searchQuery\"  •  ${displayedChannels.size} results"
-                state.selectedCategory == null -> "All Channels  •  ${displayedChannels.size}"
+                sidebarMode && searchQuery.isNotBlank() -> "\"${searchQuery}\"  •  ${displayedChannels.size}"
+                state.selectedCategory == null -> "All  •  ${displayedChannels.size}"
                 state.selectedCategory == TvUiState.CATEGORY_FAVORITES -> "Favorites  •  ${displayedChannels.size}"
                 else -> "${state.selectedCategory}  •  ${displayedChannels.size}"
             }
             Text(
                 text = headerText,
                 color = TvColors.TextSecondary,
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 fontFamily = TvFonts.Body,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
-
             if (displayedChannels.isEmpty()) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.fillMaxSize()
-                ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                     Text(
-                        text = if (sidebarMode && searchQuery.isNotBlank()) "No channels match \"$searchQuery\""
-                               else "No channels in this category",
+                        text = if (sidebarMode && searchQuery.isNotBlank()) "No results" else "No channels",
                         color = TvColors.TextMuted,
-                        fontSize = 16.sp,
+                        fontSize = 14.sp,
                         fontFamily = TvFonts.Body
                     )
                 }
             } else {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(2.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .focusGroup()
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.fillMaxSize().focusGroup()
                 ) {
-                    itemsIndexed(displayedChannels, key = { _, ch -> ch.id }) { index, channel ->
+                    itemsIndexed(displayedChannels, key = { _, ch -> ch.id }) { _, channel ->
                         ChannelListItem(
                             channel = channel,
-                            onClick = { onPlay(channel) },
-                            focusRequester = null,
-                            onToggleFavorite = onToggleFavorite,
+                            selected = channel.id == selectedChannel?.id,
+                            onClick = { selectedChannel = channel },
                         )
+                    }
+                }
+            }
+        }
+
+        // ── Col 3: detail panel ─────────────────────────────────────────
+        ChannelDetailPanel(
+            channel = selectedChannel,
+            recentChannel = state.recent,
+            onPlay = onPlay,
+            onToggleFavorite = onToggleFavorite,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+        )
+    }
+}
+
+@Composable
+private fun ChannelDetailPanel(
+    channel: Channel?,
+    recentChannel: Channel?,
+    onPlay: (Channel) -> Unit,
+    onToggleFavorite: (Channel) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier.background(TvColors.Background)
+    ) {
+        if (channel == null) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Tv,
+                        contentDescription = null,
+                        tint = TvColors.TextMuted,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Text(
+                        text = "Select a channel",
+                        color = TvColors.TextMuted,
+                        fontSize = 16.sp,
+                        fontFamily = TvFonts.Body
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(0.dp),
+                contentPadding = PaddingValues(bottom = 32.dp),
+                modifier = Modifier.fillMaxSize().focusGroup()
+            ) {
+                // ── Channel header ───────────────────────────────────────
+                item {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(20.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(TvColors.Surface.copy(alpha = 0.5f))
+                            .padding(horizontal = 28.dp, vertical = 24.dp)
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color.White.copy(alpha = 0.06f))
+                        ) {
+                            if (channel.cover.isNullOrBlank()) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Tv,
+                                    contentDescription = null,
+                                    tint = TvColors.TextSecondary,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            } else {
+                                AsyncImage(
+                                    model = channel.cover,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = channel.title,
+                                color = TvColors.TextPrimary,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                fontFamily = TvFonts.Body,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (channel.category.isNotBlank()) {
+                                Text(
+                                    text = channel.category,
+                                    color = TvColors.TextSecondary,
+                                    fontSize = 13.sp,
+                                    fontFamily = TvFonts.Body
+                                )
+                            }
+                        }
+                        if (channel.favourite) {
+                            Icon(
+                                imageVector = Icons.Rounded.Favorite,
+                                contentDescription = null,
+                                tint = TvColors.Accent,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+
+                // ── EPG ──────────────────────────────────────────────────
+                item {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 28.dp, vertical = 20.dp)
+                    ) {
+                        Text(
+                            text = "NOW PLAYING",
+                            color = TvColors.Focus,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = TvFonts.Body,
+                            letterSpacing = 1.5.sp
+                        )
+                        Text(
+                            text = "No program information",
+                            color = TvColors.TextPrimary,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                            fontFamily = TvFonts.Body
+                        )
+                        Text(
+                            text = "EPG data not available for this channel",
+                            color = TvColors.TextMuted,
+                            fontSize = 12.sp,
+                            fontFamily = TvFonts.Body
+                        )
+                    }
+                }
+
+                // ── Last watched ─────────────────────────────────────────
+                if (recentChannel != null && recentChannel.id != channel.id) {
+                    item {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 28.dp)
+                                .padding(bottom = 8.dp)
+                        ) {
+                            Text(
+                                text = "RECENTLY WATCHED",
+                                color = TvColors.TextMuted,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                fontFamily = TvFonts.Body,
+                                letterSpacing = 1.5.sp
+                            )
+                            FocusFrame(
+                                onClick = { onPlay(recentChannel) },
+                                focusedScale = 1f,
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) { focused ->
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(10.dp)
+                                ) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(Color.White.copy(alpha = 0.08f))
+                                    ) {
+                                        if (recentChannel.cover.isNullOrBlank()) {
+                                            Icon(Icons.Rounded.Tv, null, tint = if (focused) TvColors.OnFocus else TvColors.TextSecondary, modifier = Modifier.size(18.dp))
+                                        } else {
+                                            AsyncImage(model = recentChannel.cover, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                                        }
+                                    }
+                                    Text(
+                                        text = recentChannel.title,
+                                        color = if (focused) TvColors.OnFocus else TvColors.TextPrimary,
+                                        fontSize = 13.sp,
+                                        fontFamily = TvFonts.Body,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── Divider ──────────────────────────────────────────────
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .padding(horizontal = 28.dp)
+                            .background(Color.White.copy(alpha = 0.08f))
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+
+                // ── Actions ──────────────────────────────────────────────
+                item {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 28.dp, vertical = 16.dp)
+                    ) {
+                        Text(
+                            text = "ACTIONS",
+                            color = TvColors.TextMuted,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = TvFonts.Body,
+                            letterSpacing = 1.5.sp,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                        // Play
+                        FocusFrame(
+                            onClick = { onPlay(channel) },
+                            focusedScale = 1f,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) { focused ->
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.PlayArrow,
+                                    contentDescription = null,
+                                    tint = if (focused) TvColors.OnFocus else TvColors.Focus,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Text(
+                                    text = "Play",
+                                    color = if (focused) TvColors.OnFocus else TvColors.TextPrimary,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontFamily = TvFonts.Body
+                                )
+                            }
+                        }
+                        // Favorite toggle
+                        FocusFrame(
+                            onClick = { onToggleFavorite(channel) },
+                            focusedScale = 1f,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) { focused ->
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (channel.favourite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                    contentDescription = null,
+                                    tint = if (focused) TvColors.OnFocus else if (channel.favourite) TvColors.Accent else TvColors.TextPrimary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Text(
+                                    text = if (channel.favourite) "Remove from Favorites" else "Add to Favorites",
+                                    color = if (focused) TvColors.OnFocus else TvColors.TextPrimary,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontFamily = TvFonts.Body
+                                )
+                            }
+                        }
                     }
                 }
             }

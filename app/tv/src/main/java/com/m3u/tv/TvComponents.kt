@@ -591,123 +591,26 @@ fun ChannelListItem(
     channel: Channel,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    selected: Boolean = false,
     focusRequester: FocusRequester? = null,
-    onToggleFavorite: ((Channel) -> Unit)? = null,
 ) {
-    var showMenu by remember { mutableStateOf(false) }
-
-    if (showMenu && onToggleFavorite != null) {
-        Dialog(
-            onDismissRequest = { showMenu = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier
-                    .widthIn(min = 280.dp, max = 360.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(TvColors.SurfaceRaised)
-                    .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)), RoundedCornerShape(16.dp))
-                    .padding(vertical = 12.dp)
-            ) {
-                // Channel title header
-                Text(
-                    text = channel.title,
-                    color = TvColors.TextSecondary,
-                    fontSize = 12.sp,
-                    fontFamily = TvFonts.Body,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
-                )
-                // Play
-                FocusFrame(
-                    onClick = { showMenu = false; onClick() },
-                    focusedScale = 1f,
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
-                ) { focused ->
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.PlayCircle,
-                            contentDescription = null,
-                            tint = if (focused) TvColors.OnFocus else TvColors.TextPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = "Play",
-                            color = if (focused) TvColors.OnFocus else TvColors.TextPrimary,
-                            fontSize = 14.sp,
-                            fontFamily = TvFonts.Body,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-                // Favorite toggle
-                FocusFrame(
-                    onClick = { onToggleFavorite(channel); showMenu = false },
-                    focusedScale = 1f,
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
-                ) { focused ->
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (channel.favourite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                            contentDescription = null,
-                            tint = if (focused) TvColors.OnFocus else if (channel.favourite) TvColors.Accent else TvColors.TextPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = if (channel.favourite) "Remove from Favorites" else "Add to Favorites",
-                            color = if (focused) TvColors.OnFocus else TvColors.TextPrimary,
-                            fontSize = 14.sp,
-                            fontFamily = TvFonts.Body,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    var focused by remember { mutableStateOf(false) }
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
-            .background(
-                when {
-                    focused -> TvColors.Focus
-                    else -> TvColors.Surface.copy(alpha = 0.86f)
-                }
-            )
-            .border(BorderStroke(1.dp, if (focused) Color.White else Color.White.copy(alpha = 0.08f)), RoundedCornerShape(6.dp))
-            .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
-            .onFocusChanged { focused = it.isFocused }
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = { if (onToggleFavorite != null) showMenu = true }
-            )
-            .focusable()
-    ) {
+    FocusFrame(
+        onClick = onClick,
+        selected = selected,
+        focusRequester = focusRequester,
+        focusedScale = 1f,
+        shape = RoundedCornerShape(6.dp),
+        modifier = modifier.fillMaxWidth()
+    ) { focused ->
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp)
         ) {
-            // channel logo
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(36.dp)
                     .clip(RoundedCornerShape(4.dp))
                     .background(Color.White.copy(alpha = 0.08f))
             ) {
@@ -715,8 +618,8 @@ fun ChannelListItem(
                     Icon(
                         imageVector = Icons.Rounded.Tv,
                         contentDescription = null,
-                        tint = if (focused) TvColors.OnFocus else TvColors.TextSecondary,
-                        modifier = Modifier.size(22.dp)
+                        tint = if (focused || selected) TvColors.OnFocus else TvColors.TextSecondary,
+                        modifier = Modifier.size(18.dp)
                     )
                 } else {
                     AsyncImage(
@@ -733,31 +636,20 @@ fun ChannelListItem(
             ) {
                 Text(
                     text = channel.title,
-                    color = if (focused) TvColors.OnFocus else TvColors.TextPrimary,
-                    fontSize = 14.sp,
+                    color = if (focused || selected) TvColors.OnFocus else TvColors.TextPrimary,
+                    fontSize = 13.sp,
                     fontFamily = TvFonts.Body,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (channel.category.isNotBlank()) {
-                    Text(
-                        text = channel.category,
-                        color = if (focused) TvColors.OnFocus.copy(alpha = 0.7f) else TvColors.TextSecondary,
-                        fontSize = 12.sp,
-                        fontFamily = TvFonts.Body,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
             }
-            // Favorite star indicator
             if (channel.favourite) {
                 Icon(
                     imageVector = Icons.Rounded.Favorite,
                     contentDescription = null,
-                    tint = if (focused) TvColors.OnFocus else TvColors.Accent,
-                    modifier = Modifier.size(14.dp)
+                    tint = if (focused || selected) TvColors.OnFocus else TvColors.Accent,
+                    modifier = Modifier.size(12.dp)
                 )
             }
         }

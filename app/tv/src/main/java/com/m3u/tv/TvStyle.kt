@@ -47,5 +47,6 @@ enum class TvDestination(
 
 enum class TvSurface {
     Browse,
+    Guide,
     Player
 }

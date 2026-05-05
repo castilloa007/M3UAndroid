@@ -5,6 +5,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -63,10 +65,10 @@ fun App(
     }
 
     BackHandler {
-        if (surface == TvSurface.Player) {
-            closePlayer()
-        } else {
-            onBackPressed()
+        when (surface) {
+            TvSurface.Player -> surface = TvSurface.Guide
+            TvSurface.Guide -> closePlayer()
+            else -> onBackPressed()
         }
     }
 
@@ -114,7 +116,7 @@ fun App(
         }
 
         AnimatedVisibility(
-            visible = surface == TvSurface.Player,
+            visible = surface == TvSurface.Player || surface == TvSurface.Guide,
             enter = fadeIn(),
             exit = fadeOut()
         ) {
@@ -124,7 +126,26 @@ fun App(
                 isPlaying = isPlaying,
                 playbackState = playbackState,
                 onPlayPause = { viewModel.pauseOrContinue(!isPlaying) },
-                onBack = closePlayer,
+                onBack = { surface = TvSurface.Guide },
+                onClose = closePlayer
+            )
+        }
+
+        AnimatedVisibility(
+            visible = surface == TvSurface.Guide,
+            enter = slideInVertically { it },
+            exit = slideOutVertically { it }
+        ) {
+            EpgOverlayScreen(
+                player = player,
+                currentChannel = currentChannel,
+                currentProgramme = state.currentProgramme,
+                channels = state.visibleChannels,
+                onSelectChannel = {
+                    viewModel.play(it)
+                    surface = TvSurface.Player
+                },
+                onToggleFavorite = viewModel::toggleFavorite,
                 onClose = closePlayer
             )
         }
