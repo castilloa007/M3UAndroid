@@ -579,6 +579,77 @@ fun InfoPill(
     }
 }
 
+@Composable
+fun ChannelListItem(
+    channel: Channel,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
+) {
+    FocusFrame(
+        onClick = onClick,
+        focusRequester = focusRequester,
+        focusedScale = 1f,
+        shape = RoundedCornerShape(6.dp),
+        modifier = modifier.fillMaxWidth()
+    ) { focused ->
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+        ) {
+            // channel logo
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color.White.copy(alpha = 0.08f))
+            ) {
+                if (channel.cover.isNullOrBlank()) {
+                    Icon(
+                        imageVector = Icons.Rounded.Tv,
+                        contentDescription = null,
+                        tint = if (focused) TvColors.OnFocus else TvColors.TextSecondary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                } else {
+                    AsyncImage(
+                        model = channel.cover,
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+            Column(
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = channel.title,
+                    color = if (focused) TvColors.OnFocus else TvColors.TextPrimary,
+                    fontSize = 14.sp,
+                    fontFamily = TvFonts.Body,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (channel.category.isNotBlank()) {
+                    Text(
+                        text = channel.category,
+                        color = if (focused) TvColors.OnFocus.copy(alpha = 0.7f) else TvColors.TextSecondary,
+                        fontSize = 12.sp,
+                        fontFamily = TvFonts.Body,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
 private fun Key.isDpadConfirmKey(): Boolean = this == Key.DirectionCenter ||
     this == Key.Enter ||
     this == Key.NumPadEnter

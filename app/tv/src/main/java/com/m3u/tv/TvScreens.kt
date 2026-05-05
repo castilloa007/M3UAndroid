@@ -3,6 +3,8 @@ package com.m3u.tv
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +18,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -31,9 +35,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
@@ -47,6 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -84,12 +91,12 @@ fun TvBrowsePane(
     onRefresh: () -> Unit,
     onPlay: (Channel) -> Unit,
     onPlayRecent: () -> Unit,
+    onSelectCategory: (String?) -> Unit,
     onSubscribeXtream: (title: String, basicUrl: String, username: String, password: String) -> Unit,
     onSubscribeM3u: (title: String, url: String) -> Unit,
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
         if (state.playlists.isEmpty()) {
@@ -99,12 +106,10 @@ fun TvBrowsePane(
             )
         } else {
             when (destination) {
-                TvDestination.Home -> HomeScreen(
+                TvDestination.Home -> GuideScreen(
                     state = state,
-                    onOpenLibrary = onOpenLibrary,
-                    onPlaylist = onPlaylist,
+                    onSelectCategory = onSelectCategory,
                     onPlay = onPlay,
-                    onPlayRecent = onPlayRecent
                 )
 
                 TvDestination.Library -> LibraryScreen(
@@ -116,11 +121,10 @@ fun TvBrowsePane(
                     onSubscribeM3u = onSubscribeM3u,
                 )
 
-                TvDestination.Favorites -> ChannelGridScreen(
-                    title = stringResource(string.tv_favorites_title),
-                    subtitle = stringResource(string.tv_favorites_subtitle),
-                    channels = state.favorites,
-                    onPlay = onPlay
+                TvDestination.Favorites -> GuideScreen(
+                    state = state.copy(selectedCategory = TvUiState.CATEGORY_FAVORITES),
+                    onSelectCategory = onSelectCategory,
+                    onPlay = onPlay,
                 )
 
                 TvDestination.Status -> StatusScreen(state)
@@ -129,93 +133,251 @@ fun TvBrowsePane(
     }
 }
 
-@Composable
-private fun HomeScreen(
-    state: TvUiState,
-    onOpenLibrary: () -> Unit,
-    onPlaylist: (Playlist) -> Unit,
-    onPlay: (Channel) -> Unit,
-    onPlayRecent: () -> Unit
-) {
-    val featuredChannels = remember(state.recent, state.channels) {
-        (listOfNotNull(state.recent) + state.channels)
-            .distinctBy { it.id }
-            .take(10)
-    }
-    var highlightedChannel by remember { mutableStateOf<Channel?>(null) }
-    val activeChannel = highlightedChannel ?: featuredChannels.firstOrNull() ?: state.heroChannel
-    val heroFocusRequester = remember { FocusRequester() }
-    val firstFeaturedFocusRequester = remember { FocusRequester() }
-    var initialFocusRequested by remember { mutableStateOf(false) }
+private const val CATEGORY_SEARCH = "__search__"
 
-    LaunchedEffect(Unit) {
-        yield()
-        if (!initialFocusRequested) {
-            heroFocusRequester.requestFocus()
+@Composable
+private fun GuideScreen(
+    state: TvUiState,
+    onSelectCategory: (String?) -> Unit,
+    onPlay: (Channel) -> Unit,
+) {
+    val firstCategoryFocusRequester = remember { FocusRequester() }
+    val searchFocusRequester = remember { FocusRequester() }
+    var initialFocusRequested by remember { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var sidebarMode by rememberSaveable { mutableStateOf(false) } // true = search active
+
+    val displayedChannels = remember(state.visibleChannels, searchQuery, sidebarMode) {
+        if (sidebarMode && searchQuery.isNotBlank()) {
+            val q = searchQuery.trim().lowercase()
+            state.channels.filter { it.title.lowercase().contains(q) || it.category.lowercase().contains(q) }
+        } else {
+            state.visibleChannels
+        }
+    }
+
+    LaunchedEffect(state.categories) {
+        if (!initialFocusRequested && state.categories.isNotEmpty()) {
+            yield()
+            firstCategoryFocusRequester.requestFocus()
             initialFocusRequested = true
         }
     }
 
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-        contentPadding = PaddingValues(start = 48.dp, top = 48.dp, end = 64.dp, bottom = 24.dp),
+    Row(
         modifier = Modifier
             .fillMaxSize()
             .focusGroup()
     ) {
-        item {
-            FeaturedCarouselPane(
-                state = state,
-                channel = activeChannel,
-                primaryFocusRequester = heroFocusRequester,
-                nextFocusRequester = firstFeaturedFocusRequester,
-                onOpenLibrary = onOpenLibrary,
-                onPlayRecent = onPlayRecent,
-                onPlay = onPlay
-            )
-        }
-        if (featuredChannels.isNotEmpty()) {
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    SectionTitle(
-                        title = stringResource(string.tv_section_recent_channels),
-                        subtitle = stringResource(string.tv_section_recent_channels_hint),
-                        modifier = Modifier.padding(start = 48.dp)
-                    )
-                    ContentRow(
-                        channels = featuredChannels,
-                        onPlay = onPlay,
-                        onFocused = { highlightedChannel = it },
-                        firstItemFocusRequester = firstFeaturedFocusRequester
+        // ── Left: category sidebar ──────────────────────────────────────
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            contentPadding = PaddingValues(vertical = 16.dp, horizontal = 12.dp),
+            modifier = Modifier
+                .width(236.dp)
+                .fillMaxHeight()
+                .background(TvColors.Surface.copy(alpha = 0.72f))
+                .focusGroup()
+        ) {
+            // ── Search entry ───────────────────────────────────────────
+            item(key = CATEGORY_SEARCH) {
+                SearchSidebarEntry(
+                    query = searchQuery,
+                    active = sidebarMode,
+                    focusRequester = firstCategoryFocusRequester,
+                    onActivate = {
+                        sidebarMode = true
+                        searchFocusRequester.requestFocus()
+                    },
+                    onQueryChange = { searchQuery = it },
+                    onClear = { searchQuery = ""; sidebarMode = false },
+                    searchFocusRequester = searchFocusRequester,
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+
+            // ── Category list ──────────────────────────────────────────
+            val allCategories = buildList {
+                add(TvUiState.CATEGORY_FAVORITES to "⭐  Favorites")
+                add(TvUiState.CATEGORY_ALL to "📺  All Channels")
+                state.categories
+                    .filter { it != TvUiState.CATEGORY_FAVORITES && it != TvUiState.CATEGORY_ALL }
+                    .sorted()
+                    .forEach { add(it to it) }
+            }
+            itemsIndexed(allCategories, key = { _, it -> it.first }) { _, (key, label) ->
+                val isSelected = !sidebarMode && when {
+                    state.selectedCategory == null && key == TvUiState.CATEGORY_ALL -> true
+                    else -> state.selectedCategory == key
+                }
+                FocusFrame(
+                    onClick = {
+                        sidebarMode = false
+                        searchQuery = ""
+                        onSelectCategory(if (key == TvUiState.CATEGORY_ALL) null else key)
+                    },
+                    selected = isSelected,
+                    shape = RoundedCornerShape(8.dp),
+                    focusedScale = 1f,
+                    modifier = Modifier.fillMaxWidth()
+                ) { focused ->
+                    Text(
+                        text = label,
+                        color = when {
+                            focused || isSelected -> TvColors.OnFocus
+                            else -> TvColors.TextPrimary
+                        },
+                        fontSize = 13.sp,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                        fontFamily = TvFonts.Body,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
                     )
                 }
+                Spacer(Modifier.height(2.dp))
             }
         }
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionTitle(
-                    title = stringResource(string.tv_section_playlists),
-                    subtitle = stringResource(string.tv_section_playlists_hint),
-                    modifier = Modifier.padding(start = 48.dp)
-                )
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(start = 48.dp, top = 16.dp, end = 48.dp, bottom = 8.dp),
-                    modifier = Modifier.focusGroup()
+
+        // ── Right: channel list ─────────────────────────────────────────
+        Column(modifier = Modifier.fillMaxSize()) {
+            // header row
+            val headerText = when {
+                sidebarMode && searchQuery.isNotBlank() ->
+                    "Search: \"$searchQuery\"  •  ${displayedChannels.size} results"
+                state.selectedCategory == null -> "All Channels  •  ${displayedChannels.size}"
+                state.selectedCategory == TvUiState.CATEGORY_FAVORITES -> "Favorites  •  ${displayedChannels.size}"
+                else -> "${state.selectedCategory}  •  ${displayedChannels.size}"
+            }
+            Text(
+                text = headerText,
+                color = TvColors.TextSecondary,
+                fontSize = 12.sp,
+                fontFamily = TvFonts.Body,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+            )
+
+            if (displayedChannels.isEmpty()) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    items(state.playlists, key = { it.url }) { playlist ->
-                        PlaylistCard(
-                            playlist = playlist,
-                            count = state.counts[playlist] ?: 0,
-                            selected = playlist == state.selectedPlaylist,
-                            onClick = { onPlaylist(playlist) },
-                            modifier = Modifier
-                                .widthIn(min = 256.dp, max = 336.dp)
-                                .height(144.dp)
+                    Text(
+                        text = if (sidebarMode && searchQuery.isNotBlank()) "No channels match \"$searchQuery\""
+                               else "No channels in this category",
+                        color = TvColors.TextMuted,
+                        fontSize = 16.sp,
+                        fontFamily = TvFonts.Body
+                    )
+                }
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .focusGroup()
+                ) {
+                    itemsIndexed(displayedChannels, key = { _, ch -> ch.id }) { index, channel ->
+                        ChannelListItem(
+                            channel = channel,
+                            onClick = { onPlay(channel) },
+                            focusRequester = null,
                         )
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SearchSidebarEntry(
+    query: String,
+    active: Boolean,
+    focusRequester: FocusRequester,
+    searchFocusRequester: FocusRequester,
+    onActivate: () -> Unit,
+    onQueryChange: (String) -> Unit,
+    onClear: () -> Unit,
+) {
+    val focusManager = LocalFocusManager.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                if (active) TvColors.Focus.copy(alpha = 0.18f)
+                else TvColors.Surface.copy(alpha = 0.5f)
+            )
+            .border(
+                BorderStroke(
+                    1.dp,
+                    if (active) TvColors.Focus else Color.White.copy(alpha = 0.10f)
+                ),
+                RoundedCornerShape(8.dp)
+            )
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Search,
+            contentDescription = "Search",
+            tint = if (active) TvColors.Focus else TvColors.TextMuted,
+            modifier = Modifier.size(18.dp)
+        )
+        if (active) {
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                cursorBrush = SolidColor(TvColors.Focus),
+                textStyle = TextStyle(
+                    color = TvColors.TextPrimary,
+                    fontSize = 13.sp,
+                    fontFamily = TvFonts.Body,
+                ),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(
+                    onSearch = { focusManager.moveFocus(FocusDirection.Right) }
+                ),
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(searchFocusRequester)
+            )
+            if (query.isNotEmpty()) {
+                FocusFrame(
+                    onClick = onClear,
+                    shape = RoundedCornerShape(4.dp),
+                    focusedScale = 1f,
+                    modifier = Modifier.size(22.dp)
+                ) { _ ->
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Clear",
+                        tint = TvColors.TextMuted,
+                        modifier = Modifier
+                            .size(14.dp)
+                            .align(Alignment.Center)
+                    )
+                }
+            }
+        } else {
+            Text(
+                text = "Search channels…",
+                color = TvColors.TextMuted,
+                fontSize = 13.sp,
+                fontFamily = TvFonts.Body,
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { if (it.isFocused) onActivate() }
+                    .focusable()
+                    .clickable { onActivate() }
+            )
         }
     }
 }

@@ -34,10 +34,26 @@ data class TvUiState(
     val channels: List<Channel> = emptyList(),
     val favorites: List<Channel> = emptyList(),
     val recent: Channel? = null,
-    val loadingChannels: Boolean = false
+    val loadingChannels: Boolean = false,
+    val selectedCategory: String? = null,
 ) {
     val channelCount: Int get() = counts.values.sum()
     val heroChannel: Channel? get() = recent ?: channels.firstOrNull()
+    /** All distinct category names, Favorites first then sorted. */
+    val categories: List<String> get() {
+        val cats = channels.map { it.category }.filter { it.isNotBlank() }.distinct().sorted()
+        return if (favorites.isNotEmpty()) listOf(CATEGORY_FAVORITES) + cats else cats
+    }
+    /** Channels visible in the currently selected category. */
+    val visibleChannels: List<Channel> get() = when (selectedCategory) {
+        null, CATEGORY_ALL -> channels
+        CATEGORY_FAVORITES -> favorites
+        else -> channels.filter { it.category == selectedCategory }
+    }
+    companion object {
+        const val CATEGORY_ALL = "__all__"
+        const val CATEGORY_FAVORITES = "__favorites__"
+    }
 }
 
 @HiltViewModel
@@ -68,8 +84,12 @@ class TvHomeViewModel @Inject constructor(
 
     fun selectPlaylist(playlist: Playlist) {
         if (_state.value.selectedPlaylist?.url == playlist.url) return
-        _state.update { it.copy(selectedPlaylist = playlist) }
+        _state.update { it.copy(selectedPlaylist = playlist, selectedCategory = null) }
         loadChannels(playlist.url)
+    }
+
+    fun selectCategory(category: String?) {
+        _state.update { it.copy(selectedCategory = category) }
     }
 
     fun refreshSelectedPlaylist() {

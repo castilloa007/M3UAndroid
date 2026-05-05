@@ -41,7 +41,6 @@ fun App(
     val currentChannel by viewModel.currentChannel.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
     val playbackState by viewModel.playbackState.collectAsStateWithLifecycle()
-    val remoteControlCode by viewModel.remoteControlCode.collectAsStateWithLifecycle()
     val view = LocalView.current
     var destination by remember { mutableStateOf(TvDestination.Home) }
     var surface by remember { mutableStateOf(TvSurface.Browse) }
@@ -109,6 +108,7 @@ fun App(
                 },
                 onSubscribeXtream = viewModel::subscribeXtream,
                 onSubscribeM3u = viewModel::subscribeM3u,
+                onSelectCategory = viewModel::selectCategory,
             )
         }
 
@@ -128,19 +128,6 @@ fun App(
             )
         }
 
-        remoteControlCode?.let { code ->
-            Text(
-                text = code.toString().padStart(6, '0'),
-                color = TvColors.TextPrimary,
-                fontFamily = TvFonts.Body,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(24.dp)
-                    .background(TvColors.Surface.copy(alpha = 0.86f), RoundedCornerShape(8.dp))
-                    .padding(horizontal = 18.dp, vertical = 10.dp)
-            )
-        }
+
     }
 }

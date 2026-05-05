@@ -114,13 +114,15 @@ fun TvPlayerScreen(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = playerStateText(playbackState),
-                    color = TvColors.TextSecondary,
-                    fontSize = 13.sp,
-                    fontFamily = TvFonts.Body,
-                    maxLines = 1
-                )
+                if (playbackState == Player.STATE_BUFFERING) {
+                    Text(
+                        text = playerStateText(playbackState),
+                        color = TvColors.TextSecondary,
+                        fontSize = 13.sp,
+                        fontFamily = TvFonts.Body,
+                        maxLines = 1
+                    )
+                }
             }
         }
     }
