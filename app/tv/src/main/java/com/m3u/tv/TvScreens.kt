@@ -67,6 +67,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
@@ -104,11 +105,19 @@ fun EpgOverlayScreen(
     onClose: () -> Unit,
 ) {
     val timeFmt = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
+    val epgChannelFocusRequester = remember { FocusRequester() }
+
+    // Grab focus immediately so the Guide screen behind cannot steal it back
+    LaunchedEffect(Unit) {
+        yield()
+        runCatching { epgChannelFocusRequester.requestFocus() }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.88f))
+            .focusGroup()
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
 
@@ -231,11 +240,12 @@ fun EpgOverlayScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                 modifier = Modifier.fillMaxSize().focusGroup()
             ) {
-                itemsIndexed(channels, key = { _, ch -> ch.id }) { _, channel ->
+                itemsIndexed(channels, key = { _, ch -> ch.id }) { index, channel ->
                     ChannelListItem(
                         channel = channel,
                         selected = channel.id == currentChannel?.id,
                         onClick = { onSelectChannel(channel) },
+                        focusRequester = if (index == 0) epgChannelFocusRequester else null,
                     )
                 }
             }
@@ -307,6 +317,7 @@ private fun GuideScreen(
     onToggleFavorite: (Channel) -> Unit,
 ) {
     val firstCategoryFocusRequester = remember { FocusRequester() }
+    val searchEntryFocusRequester = remember { FocusRequester() }
     val searchFocusRequester = remember { FocusRequester() }
     var initialFocusRequested by remember { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -352,7 +363,7 @@ private fun GuideScreen(
                 SearchSidebarEntry(
                     query = searchQuery,
                     active = sidebarMode,
-                    focusRequester = firstCategoryFocusRequester,
+                    focusRequester = searchEntryFocusRequester,
                     onActivate = { sidebarMode = true; searchFocusRequester.requestFocus() },
                     onQueryChange = { searchQuery = it },
                     onClear = { searchQuery = ""; sidebarMode = false },
@@ -368,7 +379,7 @@ private fun GuideScreen(
                     .sorted()
                     .forEach { add(it to it) }
             }
-            itemsIndexed(allCategories, key = { _, it -> it.first }) { _, (key, label) ->
+            itemsIndexed(allCategories, key = { _, it -> it.first }) { index, (key, label) ->
                 val isSelected = !sidebarMode && when {
                     state.selectedCategory == null && key == TvUiState.CATEGORY_ALL -> true
                     else -> state.selectedCategory == key
@@ -381,6 +392,7 @@ private fun GuideScreen(
                     selected = isSelected,
                     shape = RoundedCornerShape(8.dp),
                     focusedScale = 1f,
+                    focusRequester = if (index == 0) firstCategoryFocusRequester else null,
                     modifier = Modifier.fillMaxWidth()
                 ) { focused ->
                     Text(
@@ -812,14 +824,21 @@ private fun SearchSidebarEntry(
             }
         } else {
             Text(
-                text = "Search channels…",
-                color = TvColors.TextMuted,
+                text = if (query.isNotEmpty()) query else "Search channels…",
+                color = if (query.isNotEmpty()) TvColors.TextPrimary else TvColors.TextMuted,
                 fontSize = 13.sp,
                 fontFamily = TvFonts.Body,
                 modifier = Modifier
                     .weight(1f)
                     .focusRequester(focusRequester)
-                    .onFocusChanged { if (it.isFocused) onActivate() }
+                    .onKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyUp &&
+                            (event.key == Key.DirectionCenter ||
+                             event.key == Key.Enter)) {
+                            onActivate()
+                            true
+                        } else false
+                    }
                     .focusable()
                     .clickable { onActivate() }
             )
