@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
+import androidx.work.WorkManager
 import com.m3u.data.database.model.Channel
 import com.m3u.data.database.model.DataSource
 import com.m3u.data.database.model.Playlist
@@ -13,6 +14,7 @@ import com.m3u.data.repository.tv.TvRepository
 import com.m3u.data.service.DPadReactionService
 import com.m3u.data.service.MediaCommand
 import com.m3u.data.service.PlayerManager
+import com.m3u.data.worker.SubscriptionWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +45,7 @@ class TvHomeViewModel @Inject constructor(
     private val playlistRepository: PlaylistRepository,
     private val channelRepository: ChannelRepository,
     private val playerManager: PlayerManager,
+    private val workManager: WorkManager,
     tvRepository: TvRepository,
     dPadReactionService: DPadReactionService
 ) : ViewModel() {
@@ -100,6 +103,22 @@ class TvHomeViewModel @Inject constructor(
 
     fun releasePlayer() {
         playerManager.release()
+    }
+
+    fun subscribeXtream(title: String, basicUrl: String, username: String, password: String) {
+        val url = "$basicUrl/get.php?username=$username&password=$password&type=m3u_plus"
+        SubscriptionWorker.xtream(
+            workManager = workManager,
+            title = title,
+            url = url,
+            basicUrl = basicUrl,
+            username = username,
+            password = password
+        )
+    }
+
+    fun subscribeM3u(title: String, url: String) {
+        SubscriptionWorker.m3u(workManager = workManager, title = title, url = url)
     }
 
     private fun observePlaylists() {

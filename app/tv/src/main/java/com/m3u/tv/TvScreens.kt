@@ -25,8 +25,12 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
@@ -38,21 +42,30 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -70,7 +83,9 @@ fun TvBrowsePane(
     onPlaylist: (Playlist) -> Unit,
     onRefresh: () -> Unit,
     onPlay: (Channel) -> Unit,
-    onPlayRecent: () -> Unit
+    onPlayRecent: () -> Unit,
+    onSubscribeXtream: (title: String, basicUrl: String, username: String, password: String) -> Unit,
+    onSubscribeM3u: (title: String, url: String) -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -78,7 +93,10 @@ fun TvBrowsePane(
         contentAlignment = Alignment.Center
     ) {
         if (state.playlists.isEmpty()) {
-            EmptyLibraryScreen()
+            EmptyLibraryScreen(
+                onSubscribeXtream = onSubscribeXtream,
+                onSubscribeM3u = onSubscribeM3u,
+            )
         } else {
             when (destination) {
                 TvDestination.Home -> HomeScreen(
@@ -93,7 +111,9 @@ fun TvBrowsePane(
                     state = state,
                     onPlaylist = onPlaylist,
                     onRefresh = onRefresh,
-                    onPlay = onPlay
+                    onPlay = onPlay,
+                    onSubscribeXtream = onSubscribeXtream,
+                    onSubscribeM3u = onSubscribeM3u,
                 )
 
                 TvDestination.Favorites -> ChannelGridScreen(
@@ -397,11 +417,28 @@ private fun LibraryScreen(
     state: TvUiState,
     onPlaylist: (Playlist) -> Unit,
     onRefresh: () -> Unit,
-    onPlay: (Channel) -> Unit
+    onPlay: (Channel) -> Unit,
+    onSubscribeXtream: (title: String, basicUrl: String, username: String, password: String) -> Unit,
+    onSubscribeM3u: (title: String, url: String) -> Unit,
 ) {
     val playlistFocusRequester = remember { FocusRequester() }
     val focusTarget = state.selectedPlaylist ?: state.playlists.firstOrNull()
     var initialFocusRequested by remember { mutableStateOf(false) }
+    var showSubscribeDialog by rememberSaveable { mutableStateOf(false) }
+
+    if (showSubscribeDialog) {
+        SubscribeDialog(
+            onSubscribeXtream = { t, b, u, p ->
+                onSubscribeXtream(t, b, u, p)
+                showSubscribeDialog = false
+            },
+            onSubscribeM3u = { t, u ->
+                onSubscribeM3u(t, u)
+                showSubscribeDialog = false
+            },
+            onDismiss = { showSubscribeDialog = false }
+        )
+    }
 
     LaunchedEffect(Unit) {
         if (focusTarget != null && !initialFocusRequested) {
@@ -470,6 +507,11 @@ private fun LibraryScreen(
                     text = stringResource(string.feat_setting_label_subscribe),
                     icon = Icons.Rounded.Refresh,
                     onClick = onRefresh
+                )
+                TvActionButton(
+                    text = "Add Playlist",
+                    icon = Icons.Rounded.Add,
+                    onClick = { showSubscribeDialog = true }
                 )
             }
         }
@@ -612,7 +654,26 @@ private fun ChannelGrid(
 }
 
 @Composable
-private fun EmptyLibraryScreen() {
+private fun EmptyLibraryScreen(
+    onSubscribeXtream: (title: String, basicUrl: String, username: String, password: String) -> Unit,
+    onSubscribeM3u: (title: String, url: String) -> Unit,
+) {
+    var showSubscribeDialog by rememberSaveable { mutableStateOf(false) }
+
+    if (showSubscribeDialog) {
+        SubscribeDialog(
+            onSubscribeXtream = { t, b, u, p ->
+                onSubscribeXtream(t, b, u, p)
+                showSubscribeDialog = false
+            },
+            onSubscribeM3u = { t, u ->
+                onSubscribeM3u(t, u)
+                showSubscribeDialog = false
+            },
+            onDismiss = { showSubscribeDialog = false }
+        )
+    }
+
     Row(
         horizontalArrangement = Arrangement.spacedBy(48.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -661,6 +722,12 @@ private fun EmptyLibraryScreen() {
                 InfoPill(text = stringResource(string.tv_empty_library_phone_hint), modifier = Modifier.fillMaxWidth())
                 InfoPill(text = stringResource(string.tv_empty_library_restore_hint), modifier = Modifier.fillMaxWidth())
             }
+            TvActionButton(
+                text = "Add Playlist",
+                icon = Icons.Rounded.Add,
+                onClick = { showSubscribeDialog = true },
+                modifier = Modifier.widthIn(min = 180.dp)
+            )
         }
         SetupPanel(
             modifier = Modifier
@@ -727,4 +794,188 @@ private fun SetupStep(text: String) {
             overflow = TextOverflow.Ellipsis
         )
     }
+}
+
+@Composable
+private fun SubscribeDialog(
+    onSubscribeXtream: (title: String, basicUrl: String, username: String, password: String) -> Unit,
+    onSubscribeM3u: (title: String, url: String) -> Unit,
+    onDismiss: () -> Unit,
+    initialTitle: String = "",
+    initialBasicUrl: String = "",
+    initialUsername: String = "",
+    initialPassword: String = "",
+) {
+    var isXtream by rememberSaveable { mutableStateOf(true) }
+    var title by rememberSaveable { mutableStateOf(initialTitle) }
+    var basicUrl by rememberSaveable { mutableStateOf(initialBasicUrl) }
+    var username by rememberSaveable { mutableStateOf(initialUsername) }
+    var password by rememberSaveable { mutableStateOf(initialPassword) }
+    var m3uUrl by rememberSaveable { mutableStateOf("") }
+    val focusManager = LocalFocusManager.current
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.72f))
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+            modifier = Modifier
+                .widthIn(max = 560.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(TvColors.Surface)
+                .padding(32.dp)
+        ) {
+            Text(
+                text = "Add Playlist",
+                color = TvColors.TextPrimary,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = TvFonts.Body
+            )
+
+            // Source type toggle
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TvActionButton(
+                    text = "Xtream",
+                    icon = Icons.Rounded.VideoLibrary,
+                    onClick = { isXtream = true },
+                    showTextWhenUnfocused = true,
+                    modifier = if (isXtream) Modifier.border(
+                        2.dp, TvColors.Focus, RoundedCornerShape(24.dp)
+                    ) else Modifier
+                )
+                TvActionButton(
+                    text = "M3U URL",
+                    icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
+                    onClick = { isXtream = false },
+                    showTextWhenUnfocused = true,
+                    modifier = if (!isXtream) Modifier.border(
+                        2.dp, TvColors.Focus, RoundedCornerShape(24.dp)
+                    ) else Modifier
+                )
+            }
+
+            // Fields
+            TvInputField(
+                value = title,
+                onValueChange = { title = it },
+                placeholder = "Title",
+                imeAction = ImeAction.Next,
+                onNext = { focusManager.moveFocus(FocusDirection.Down) }
+            )
+            if (isXtream) {
+                TvInputField(
+                    value = basicUrl,
+                    onValueChange = { basicUrl = it },
+                    placeholder = "Server URL  (e.g. http://server.com:port)",
+                    imeAction = ImeAction.Next,
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                )
+                TvInputField(
+                    value = username,
+                    onValueChange = { username = it },
+                    placeholder = "Username",
+                    imeAction = ImeAction.Next,
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                )
+                TvInputField(
+                    value = password,
+                    onValueChange = { password = it },
+                    placeholder = "Password",
+                    isPassword = true,
+                    imeAction = ImeAction.Done,
+                    onDone = {
+                        if (title.isNotBlank() && basicUrl.isNotBlank() && username.isNotBlank()) {
+                            onSubscribeXtream(title, basicUrl, username, password)
+                        }
+                    }
+                )
+            } else {
+                TvInputField(
+                    value = m3uUrl,
+                    onValueChange = { m3uUrl = it },
+                    placeholder = "M3U URL",
+                    imeAction = ImeAction.Done,
+                    onDone = {
+                        if (title.isNotBlank() && m3uUrl.isNotBlank()) {
+                            onSubscribeM3u(title, m3uUrl)
+                        }
+                    }
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TvActionButton(
+                    text = "Subscribe",
+                    icon = Icons.Rounded.Add,
+                    onClick = {
+                        if (isXtream) {
+                            if (title.isNotBlank() && basicUrl.isNotBlank() && username.isNotBlank()) {
+                                onSubscribeXtream(title, basicUrl, username, password)
+                            }
+                        } else {
+                            if (title.isNotBlank() && m3uUrl.isNotBlank()) {
+                                onSubscribeM3u(title, m3uUrl)
+                            }
+                        }
+                    }
+                )
+                TvActionButton(
+                    text = "Cancel",
+                    icon = Icons.Rounded.Favorite,
+                    onClick = onDismiss
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TvInputField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    isPassword: Boolean = false,
+    imeAction: ImeAction = ImeAction.Next,
+    onNext: () -> Unit = {},
+    onDone: () -> Unit = {},
+) {
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = true,
+        textStyle = TextStyle(
+            color = TvColors.TextPrimary,
+            fontSize = 15.sp,
+            fontFamily = TvFonts.Body
+        ),
+        cursorBrush = SolidColor(TvColors.Focus),
+        visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
+        keyboardOptions = KeyboardOptions(imeAction = imeAction),
+        keyboardActions = KeyboardActions(
+            onNext = { onNext() },
+            onDone = { onDone() }
+        ),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(TvColors.SurfaceRaised)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        decorationBox = { inner ->
+            if (value.isEmpty()) {
+                Text(
+                    text = placeholder,
+                    color = TvColors.TextMuted,
+                    fontSize = 15.sp,
+                    fontFamily = TvFonts.Body,
+                    maxLines = 1
+                )
+            }
+            inner()
+        }
+    )
 }

@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.com.android.application)
     alias(libs.plugins.org.jetbrains.kotlin.android)
@@ -9,6 +11,12 @@ plugins {
 }
 
 val m3uMockServerUrl = providers.gradleProperty("m3uMockServerUrl").orElse("http://10.0.2.2:8080")
+
+val localProperties = Properties().also { props ->
+    val file = rootProject.file("local.properties")
+    if (file.exists()) props.load(file.inputStream())
+}
+fun localProp(key: String) = localProperties.getProperty(key, "")
 
 android {
     namespace = "com.m3u.tv"
@@ -22,6 +30,11 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         testInstrumentationRunnerArguments["m3uMockServerUrl"] = m3uMockServerUrl.get()
+
+        buildConfigField("String", "DEV_XTREAM_TITLE",    "\"${localProp("dev.xtream.title")}\"")
+        buildConfigField("String", "DEV_XTREAM_BASIC_URL","\"${localProp("dev.xtream.basicUrl")}\"")
+        buildConfigField("String", "DEV_XTREAM_USERNAME", "\"${localProp("dev.xtream.username")}\"")
+        buildConfigField("String", "DEV_XTREAM_PASSWORD", "\"${localProp("dev.xtream.password")}\"")
     }
     buildTypes {
         release {

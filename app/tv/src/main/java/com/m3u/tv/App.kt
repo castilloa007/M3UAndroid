@@ -50,6 +50,19 @@ fun App(
         surface = TvSurface.Browse
     }
 
+    // Auto-subscribe using local.properties credentials if no playlists exist yet
+    LaunchedEffect(state.playlists) {
+        if (state.playlists.isEmpty()) {
+            val basicUrl = DevDefaults.XTREAM_BASIC_URL
+            val username = DevDefaults.XTREAM_USERNAME
+            val password = DevDefaults.XTREAM_PASSWORD
+            val title = DevDefaults.XTREAM_TITLE
+            if (!basicUrl.isNullOrBlank() && !username.isNullOrBlank() && !title.isNullOrBlank()) {
+                viewModel.subscribeXtream(title, basicUrl, username, password.orEmpty())
+            }
+        }
+    }
+
     BackHandler {
         if (surface == TvSurface.Player) {
             closePlayer()
@@ -93,7 +106,9 @@ fun App(
                 onPlayRecent = {
                     viewModel.playRecent()
                     surface = TvSurface.Player
-                }
+                },
+                onSubscribeXtream = viewModel::subscribeXtream,
+                onSubscribeM3u = viewModel::subscribeM3u,
             )
         }
 
