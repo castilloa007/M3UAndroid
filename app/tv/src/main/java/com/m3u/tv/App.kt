@@ -109,6 +109,7 @@ fun App(
                 onSubscribeXtream = viewModel::subscribeXtream,
                 onSubscribeM3u = viewModel::subscribeM3u,
                 onSelectCategory = viewModel::selectCategory,
+                onToggleFavorite = viewModel::toggleFavorite,
             )
         }
 

@@ -92,6 +92,7 @@ fun TvBrowsePane(
     onPlay: (Channel) -> Unit,
     onPlayRecent: () -> Unit,
     onSelectCategory: (String?) -> Unit,
+    onToggleFavorite: (Channel) -> Unit,
     onSubscribeXtream: (title: String, basicUrl: String, username: String, password: String) -> Unit,
     onSubscribeM3u: (title: String, url: String) -> Unit,
 ) {
@@ -110,6 +111,7 @@ fun TvBrowsePane(
                     state = state,
                     onSelectCategory = onSelectCategory,
                     onPlay = onPlay,
+                    onToggleFavorite = onToggleFavorite,
                 )
 
                 TvDestination.Library -> LibraryScreen(
@@ -125,6 +127,7 @@ fun TvBrowsePane(
                     state = state.copy(selectedCategory = TvUiState.CATEGORY_FAVORITES),
                     onSelectCategory = onSelectCategory,
                     onPlay = onPlay,
+                    onToggleFavorite = onToggleFavorite,
                 )
 
                 TvDestination.Status -> StatusScreen(state)
@@ -140,6 +143,7 @@ private fun GuideScreen(
     state: TvUiState,
     onSelectCategory: (String?) -> Unit,
     onPlay: (Channel) -> Unit,
+    onToggleFavorite: (Channel) -> Unit,
 ) {
     val firstCategoryFocusRequester = remember { FocusRequester() }
     val searchFocusRequester = remember { FocusRequester() }
@@ -285,6 +289,7 @@ private fun GuideScreen(
                             channel = channel,
                             onClick = { onPlay(channel) },
                             focusRequester = null,
+                            onToggleFavorite = onToggleFavorite,
                         )
                     }
                 }
