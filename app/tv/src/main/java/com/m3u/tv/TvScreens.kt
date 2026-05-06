@@ -117,7 +117,6 @@ fun EpgGridScreen(
     onSelectChannel: (Channel) -> Unit,
     onSelectCategory: (String?) -> Unit,
     onToggleFavorite: (Channel) -> Unit,
-    onClose: () -> Unit,
     onNavigateToTV: () -> Unit,
     onNavigateToFavorites: () -> Unit,
     onNavigateToSettings: () -> Unit,
@@ -206,7 +205,6 @@ fun EpgGridScreen(
                     nowMs = nowMs,
                     timeFmt = timeFmt,
                     onToggleFavorite = { currentChannel?.let(onToggleFavorite) },
-                    onClose = onClose,
                 )
                 EpgTimeHeader(windowStartMs = windowStartMs, windowEndMs = windowEndMs, nowMs = nowMs, timeFmt = timeFmt)
                 LazyColumn(
@@ -242,7 +240,6 @@ private fun EpgTopBar(
     nowMs: Long,
     timeFmt: SimpleDateFormat,
     onToggleFavorite: () -> Unit,
-    onClose: () -> Unit,
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -292,9 +289,6 @@ private fun EpgTopBar(
             currentChannel?.let { Text(it.category, color = EpgColors.TextSecondary, fontSize = 11.sp, fontFamily = TvFonts.Body) }
             FocusFrame(onClick = onToggleFavorite, shape = RoundedCornerShape(8.dp), focusedScale = 1f, modifier = Modifier.size(34.dp)) { focused ->
                 Icon(imageVector = if (currentChannel?.favourite == true) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, contentDescription = null, tint = if (focused) TvColors.OnFocus else if (currentChannel?.favourite == true) TvColors.Accent else EpgColors.TextSecondary, modifier = Modifier.align(Alignment.Center).size(18.dp))
-            }
-            FocusFrame(onClick = onClose, shape = RoundedCornerShape(8.dp), focusedScale = 1f, modifier = Modifier.size(34.dp)) { focused ->
-                Icon(Icons.Rounded.Close, null, tint = if (focused) TvColors.OnFocus else EpgColors.TextSecondary, modifier = Modifier.align(Alignment.Center).size(16.dp))
             }
         }
     }

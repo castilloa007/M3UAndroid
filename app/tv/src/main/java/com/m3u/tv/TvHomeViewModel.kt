@@ -131,6 +131,16 @@ class TvHomeViewModel @Inject constructor(
         playerManager.release()
     }
 
+    fun prepareEpgForCurrentChannel() {
+        val channel = currentChannel.value ?: return
+        val category = if (channel.favourite) {
+            TvUiState.CATEGORY_FAVORITES
+        } else {
+            channel.category.takeIf { it.isNotBlank() }
+        }
+        _state.update { it.copy(selectedCategory = category) }
+    }
+
     fun subscribeXtream(title: String, basicUrl: String, username: String, password: String) {
         val url = "$basicUrl/get.php?username=$username&password=$password&type=m3u_plus"
         SubscriptionWorker.xtream(
@@ -208,18 +218,18 @@ class TvHomeViewModel @Inject constructor(
 
     fun loadEpgData() {
         viewModelScope.launch(Dispatchers.IO) {
-            // First refresh EPG from network if stale
-            val playlistUrl = state.value.selectedPlaylist?.url
-            if (playlistUrl != null) {
+            // First refresh EPG from network if stale for the actual visible channels
+            val channels = state.value.visibleChannels.ifEmpty { state.value.channels }
+            val playlistUrls = channels.map { it.playlistUrl }.distinct().toTypedArray()
+            if (playlistUrls.isNotEmpty()) {
                 runCatching {
                     programmeRepository.checkOrRefreshProgrammesOrThrow(
-                        playlistUrl,
+                        *playlistUrls,
                         ignoreCache = false
                     ).collect {}
                 }
             }
             // Then query current programmes for all visible channels
-            val channels = state.value.visibleChannels
             val programmes = channels.associate { ch ->
                 ch.id to programmeRepository.getProgrammeCurrently(ch.id)
             }

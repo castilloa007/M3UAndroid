@@ -81,8 +81,11 @@ fun App(
 
     BackHandler {
         when (surface) {
-            TvSurface.Player -> surface = TvSurface.Epg
-            TvSurface.Epg -> closePlayer()
+            TvSurface.Player -> {
+                viewModel.prepareEpgForCurrentChannel()
+                surface = TvSurface.Epg
+            }
+            TvSurface.Epg -> surface = TvSurface.Player
             else -> onBackPressed()
         }
     }
@@ -140,9 +143,16 @@ fun App(
                 channel = currentChannel,
                 isPlaying = isPlaying,
                 playbackState = playbackState,
+                backEnabled = surface == TvSurface.Player,
                 onPlayPause = { viewModel.pauseOrContinue(!isPlaying) },
-                onBack = { surface = TvSurface.Epg },
-                onOpenEpg = { surface = TvSurface.Epg; viewModel.loadEpgData() },
+                onBack = {
+                    viewModel.prepareEpgForCurrentChannel()
+                    surface = TvSurface.Epg
+                },
+                onOpenEpg = {
+                    viewModel.prepareEpgForCurrentChannel()
+                    surface = TvSurface.Epg
+                },
                 onClose = closePlayer
             )
         }
@@ -165,7 +175,6 @@ fun App(
                 },
                 onSelectCategory = viewModel::selectCategory,
                 onToggleFavorite = viewModel::toggleFavorite,
-                onClose = closePlayer,
                 onNavigateToTV = { surface = TvSurface.Browse; destination = TvDestination.Home },
                 onNavigateToFavorites = { surface = TvSurface.Browse; destination = TvDestination.Favorites },
                 onNavigateToSettings = { surface = TvSurface.Browse; destination = TvDestination.Status },

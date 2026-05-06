@@ -57,12 +57,13 @@ fun TvPlayerScreen(
     channel: Channel?,
     isPlaying: Boolean,
     playbackState: Int,
+    backEnabled: Boolean,
     onPlayPause: () -> Unit,
     onBack: () -> Unit,
     onOpenEpg: () -> Unit,
     onClose: () -> Unit
 ) {
-    BackHandler(onBack = onBack)
+    BackHandler(enabled = backEnabled, onBack = onBack)
     val playPauseFocusRequester = remember { FocusRequester() }
     var showOverlay by remember { mutableStateOf(true) }
 
