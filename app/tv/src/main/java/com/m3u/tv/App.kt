@@ -144,6 +144,7 @@ fun App(
                 isPlaying = isPlaying,
                 playbackState = playbackState,
                 backEnabled = surface == TvSurface.Player,
+                controlsEnabled = surface == TvSurface.Player,
                 onPlayPause = { viewModel.pauseOrContinue(!isPlaying) },
                 onBack = {
                     viewModel.prepareEpgForCurrentChannel()

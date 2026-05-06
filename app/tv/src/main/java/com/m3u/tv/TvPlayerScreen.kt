@@ -58,6 +58,7 @@ fun TvPlayerScreen(
     isPlaying: Boolean,
     playbackState: Int,
     backEnabled: Boolean,
+    controlsEnabled: Boolean,
     onPlayPause: () -> Unit,
     onBack: () -> Unit,
     onOpenEpg: () -> Unit,
@@ -88,6 +89,7 @@ fun TvPlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
             .onPreviewKeyEvent { event ->
+            if (!controlsEnabled) return@onPreviewKeyEvent false
             if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
                 onOpenEpg()
                 true

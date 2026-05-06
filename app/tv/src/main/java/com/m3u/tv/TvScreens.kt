@@ -154,7 +154,7 @@ fun EpgGridScreen(
                 when (epgPanel) {
                     EpgPanel.Grid -> { epgPanel = EpgPanel.Categories; true }
                     EpgPanel.Categories -> { epgPanel = EpgPanel.MainMenu; true }
-                    EpgPanel.MainMenu -> false
+                    EpgPanel.MainMenu -> true
                 }
             } else if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) {
                 when (epgPanel) {
@@ -504,6 +504,7 @@ fun TvBrowsePane(
 }
 
 private const val CATEGORY_SEARCH = "__search__"
+private const val SEARCH_HISTORY_LIMIT = 8
 
 @Composable
 private fun GuideScreen(
@@ -517,8 +518,16 @@ private fun GuideScreen(
     val searchFocusRequester = remember { FocusRequester() }
     var initialFocusRequested by remember { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
+    var searchHistory by rememberSaveable { mutableStateOf(listOf<String>()) }
     var sidebarMode by rememberSaveable { mutableStateOf(false) }
     var selectedChannel by remember { mutableStateOf<Channel?>(null) }
+
+    fun addSearchHistory(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isBlank()) return
+        searchHistory = (listOf(trimmed) + searchHistory.filterNot { it.equals(trimmed, ignoreCase = true) })
+            .take(SEARCH_HISTORY_LIMIT)
+    }
 
     // Reset selection when category/search changes
     LaunchedEffect(state.selectedCategory, searchQuery) { selectedChannel = null }
@@ -566,6 +575,49 @@ private fun GuideScreen(
                     searchFocusRequester = searchFocusRequester,
                 )
                 Spacer(Modifier.height(8.dp))
+            }
+            if (sidebarMode && searchQuery.isBlank() && searchHistory.isNotEmpty()) {
+                item(key = "__search_history_header") {
+                    Text(
+                        text = "RECENT SEARCHES",
+                        color = TvColors.TextMuted,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = TvFonts.Body,
+                        letterSpacing = 1.2.sp,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+                itemsIndexed(searchHistory, key = { _, q -> "history-$q" }) { _, q ->
+                    FocusFrame(
+                        onClick = { searchQuery = q; sidebarMode = true },
+                        shape = RoundedCornerShape(8.dp),
+                        focusedScale = 1f,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { focused ->
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Search,
+                                contentDescription = null,
+                                tint = if (focused) TvColors.OnFocus else TvColors.TextMuted,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = q,
+                                color = if (focused) TvColors.OnFocus else TvColors.TextPrimary,
+                                fontSize = 12.sp,
+                                fontFamily = TvFonts.Body,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+                item(key = "__search_history_spacing") { Spacer(Modifier.height(8.dp)) }
             }
             val allCategories = buildList {
                 add(TvUiState.CATEGORY_FAVORITES to "⭐  Favorites")
@@ -647,7 +699,10 @@ private fun GuideScreen(
                         ChannelListItem(
                             channel = channel,
                             selected = channel.id == selectedChannel?.id,
-                            onClick = { selectedChannel = channel },
+                            onClick = {
+                                if (sidebarMode && searchQuery.isNotBlank()) addSearchHistory(searchQuery)
+                                selectedChannel = channel
+                            },
                         )
                     }
                 }
