@@ -134,7 +134,7 @@ fun App(
         }
 
         AnimatedVisibility(
-            visible = surface == TvSurface.Player || surface == TvSurface.Epg,
+            visible = surface == TvSurface.Player,
             enter = fadeIn(),
             exit = fadeOut()
         ) {
