@@ -31,7 +31,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +59,7 @@ fun TvPlayerScreen(
     playbackState: Int,
     onPlayPause: () -> Unit,
     onBack: () -> Unit,
+    onOpenEpg: () -> Unit,
     onClose: () -> Unit
 ) {
     BackHandler(onBack = onBack)
@@ -81,7 +86,15 @@ fun TvPlayerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .onPreviewKeyEvent { showOverlay = true; false }
+            .onPreviewKeyEvent { event ->
+            if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
+                onOpenEpg()
+                true
+            } else {
+                showOverlay = true
+                false
+            }
+        }
     ) {
         if (player != null) {
             PlayerSurface(

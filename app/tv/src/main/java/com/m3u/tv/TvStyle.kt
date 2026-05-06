@@ -47,6 +47,26 @@ enum class TvDestination(
 
 enum class TvSurface {
     Browse,
-    Guide,
+    Epg,
     Player
+}
+
+enum class EpgPanel {
+    Grid, Categories, MainMenu
+}
+
+object EpgColors {
+    val Background = Color(0xFF0A1628)
+    val Surface = Color(0xFF0D1F38)
+    val Header = Color(0xFF071020)
+    val Grid = Color(0xFF1A3050)
+    val PastBar = Color(0xFF0C1E2E)
+    val ProgramBar = Color(0xFF16344E)
+    val CurrentChannelBg = Color(0xFF0D2B45)
+    val CurrentProgramBg = Color(0xFF1A5A42)
+    val Accent = Color(0xFF1EC8F0)
+    val TextPrimary = Color(0xFFF0F4F8)
+    val TextSecondary = Color(0xFF90A4B8)
+    val TextMuted = Color(0xFF506070)
+    val NowLine = Color(0xFF1EC8F0)
 }

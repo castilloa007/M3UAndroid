@@ -1,6 +1,14 @@
 package com.m3u.tv
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -41,6 +49,7 @@ import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.tv.material3.Icon
@@ -64,6 +73,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -86,6 +96,7 @@ import com.m3u.data.database.model.Channel
 import com.m3u.data.database.model.Playlist
 import com.m3u.data.database.model.Programme
 import com.m3u.i18n.R.string
+import androidx.activity.compose.BackHandler
 import kotlinx.coroutines.yield
 import androidx.media3.common.Player
 import androidx.media3.ui.compose.PlayerSurface
@@ -95,158 +106,338 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun EpgOverlayScreen(
+fun EpgGridScreen(
     player: Player?,
-    currentChannel: com.m3u.data.database.model.Channel?,
+    currentChannel: Channel?,
     currentProgramme: Programme?,
-    channels: List<com.m3u.data.database.model.Channel>,
-    onSelectChannel: (com.m3u.data.database.model.Channel) -> Unit,
-    onToggleFavorite: (com.m3u.data.database.model.Channel) -> Unit,
+    channels: List<Channel>,
+    channelProgrammes: Map<Int, Programme?>,
+    state: TvUiState,
+    onSelectChannel: (Channel) -> Unit,
+    onSelectCategory: (String?) -> Unit,
+    onToggleFavorite: (Channel) -> Unit,
     onClose: () -> Unit,
+    onNavigateToTV: () -> Unit,
+    onNavigateToFavorites: () -> Unit,
+    onNavigateToSettings: () -> Unit,
+    onNavigateToSearch: () -> Unit,
 ) {
+    var epgPanel by remember { mutableStateOf(EpgPanel.Grid) }
+    val channelListFocusRequester = remember { FocusRequester() }
+    val categoriesFocusRequester = remember { FocusRequester() }
+    val mainMenuFocusRequester = remember { FocusRequester() }
+
+    val nowMs = remember { System.currentTimeMillis() }
     val timeFmt = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
-    val epgChannelFocusRequester = remember { FocusRequester() }
-
-    // Grab focus immediately so the Guide screen behind cannot steal it back
-    LaunchedEffect(Unit) {
-        yield()
-        runCatching { epgChannelFocusRequester.requestFocus() }
+    val windowStartMs = remember {
+        val slotMs = 30 * 60_000L
+        (nowMs / slotMs) * slotMs - slotMs
     }
+    val windowEndMs = remember { windowStartMs + 3 * 60 * 60_000L }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.88f))
-            .focusGroup()
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+    BackHandler(enabled = epgPanel != EpgPanel.Grid) {
+        epgPanel = if (epgPanel == EpgPanel.MainMenu) EpgPanel.Categories else EpgPanel.Grid
+    }
+    LaunchedEffect(epgPanel) {
+        yield()
+        when (epgPanel) {
+            EpgPanel.Grid -> runCatching { channelListFocusRequester.requestFocus() }
+            EpgPanel.Categories -> runCatching { categoriesFocusRequester.requestFocus() }
+            EpgPanel.MainMenu -> runCatching { mainMenuFocusRequester.requestFocus() }
+        }
+    }
+    LaunchedEffect(Unit) { yield(); runCatching { channelListFocusRequester.requestFocus() } }
 
-            // ── Top strip: mini PiP + current programme info ─────────────
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(20.dp),
-                verticalAlignment = Alignment.Top,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(TvColors.Surface.copy(alpha = 0.9f))
-                    .padding(16.dp)
+    Box(modifier = Modifier.fillMaxSize().background(EpgColors.Background).focusGroup()) {
+        Row(modifier = Modifier.fillMaxSize()) {
+
+            // Main menu panel
+            AnimatedVisibility(
+                visible = epgPanel == EpgPanel.MainMenu,
+                enter = slideInHorizontally { -it } + fadeIn(),
+                exit = slideOutHorizontally { -it } + fadeOut(),
             ) {
-                // Mini PiP
-                Box(
-                    modifier = Modifier
-                        .width(256.dp)
-                        .height(144.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.Black)
-                        .border(BorderStroke(2.dp, TvColors.Focus.copy(alpha = 0.6f)), RoundedCornerShape(8.dp))
-                ) {
-                    if (player != null) {
-                        PlayerSurface(
-                            player = player,
-                            surfaceType = SURFACE_TYPE_TEXTURE_VIEW,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                }
-
-                // Programme info
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.weight(1f).padding(top = 4.dp)
-                ) {
-                    Text(
-                        text = currentChannel?.title.orEmpty(),
-                        color = TvColors.TextPrimary,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        fontFamily = TvFonts.Body,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (currentProgramme != null) {
-                        Text(
-                            text = currentProgramme.title,
-                            color = TvColors.Focus,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium,
-                            fontFamily = TvFonts.Body,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        val timeRange = remember(currentProgramme.start, currentProgramme.end) {
-                            "${timeFmt.format(Date(currentProgramme.start))} – ${timeFmt.format(Date(currentProgramme.end))}"
-                        }
-                        Text(
-                            text = timeRange,
-                            color = TvColors.TextSecondary,
-                            fontSize = 13.sp,
-                            fontFamily = TvFonts.Body
-                        )
-                        if (currentProgramme.description.isNotBlank()) {
-                            Text(
-                                text = currentProgramme.description,
-                                color = TvColors.TextMuted,
-                                fontSize = 12.sp,
-                                fontFamily = TvFonts.Body,
-                                maxLines = 3,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    } else {
-                        Text(
-                            text = "No programme information available",
-                            color = TvColors.TextMuted,
-                            fontSize = 13.sp,
-                            fontFamily = TvFonts.Body
-                        )
-                    }
-                }
-
-                // Close hint
-                FocusFrame(
-                    onClick = onClose,
-                    shape = RoundedCornerShape(8.dp),
-                    focusedScale = 1f,
-                    modifier = Modifier.size(40.dp)
-                ) { focused ->
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = "Close",
-                        tint = if (focused) TvColors.OnFocus else TvColors.TextMuted,
-                        modifier = Modifier.size(20.dp).align(Alignment.Center)
-                    )
-                }
+                EpgMainMenuPanel(
+                    focusRequester = mainMenuFocusRequester,
+                    onNavigateToSearch = onNavigateToSearch,
+                    onNavigateToTV = onNavigateToTV,
+                    onNavigateToFavorites = onNavigateToFavorites,
+                    onNavigateToSettings = onNavigateToSettings,
+                )
             }
 
-            // ── Divider ───────────────────────────────────────────────────
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(TvColors.Focus.copy(alpha = 0.3f))
-            )
-
-            // ── Channel list ──────────────────────────────────────────────
-            Text(
-                text = "CHANNELS IN THIS CATEGORY",
-                color = TvColors.TextMuted,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                fontFamily = TvFonts.Body,
-                letterSpacing = 1.5.sp,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)
-            )
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                modifier = Modifier.fillMaxSize().focusGroup()
+            // Categories panel
+            AnimatedVisibility(
+                visible = epgPanel == EpgPanel.Categories || epgPanel == EpgPanel.MainMenu,
+                enter = slideInHorizontally { -it } + fadeIn(),
+                exit = slideOutHorizontally { -it } + fadeOut(),
             ) {
-                itemsIndexed(channels, key = { _, ch -> ch.id }) { index, channel ->
-                    ChannelListItem(
-                        channel = channel,
-                        selected = channel.id == currentChannel?.id,
-                        onClick = { onSelectChannel(channel) },
-                        focusRequester = if (index == 0) epgChannelFocusRequester else null,
-                    )
+                EpgCategoriesPanel(
+                    state = state,
+                    focusRequester = categoriesFocusRequester,
+                    onSelectCategory = { cat -> onSelectCategory(cat); epgPanel = EpgPanel.Grid },
+                    onNavigateLeft = { if (epgPanel == EpgPanel.Categories) epgPanel = EpgPanel.MainMenu },
+                )
+            }
+
+            // EPG grid + time header
+            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                EpgTopBar(
+                    player = player,
+                    currentChannel = currentChannel,
+                    currentProgramme = currentProgramme,
+                    nowMs = nowMs,
+                    timeFmt = timeFmt,
+                    onToggleFavorite = { currentChannel?.let(onToggleFavorite) },
+                    onClose = onClose,
+                )
+                EpgTimeHeader(windowStartMs = windowStartMs, windowEndMs = windowEndMs, nowMs = nowMs, timeFmt = timeFmt)
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .onKeyEvent { event ->
+                            if (event.type == KeyEventType.KeyDown &&
+                                event.key == Key.DirectionLeft &&
+                                epgPanel == EpgPanel.Grid
+                            ) { epgPanel = EpgPanel.Categories; true } else false
+                        }
+                        .focusGroup()
+                ) {
+                    itemsIndexed(channels, key = { _, ch -> ch.id }) { index, channel ->
+                        EpgChannelRow(
+                            channelNumber = index + 1,
+                            channel = channel,
+                            programme = channelProgrammes[channel.id],
+                            isCurrentChannel = channel.id == currentChannel?.id,
+                            windowStartMs = windowStartMs,
+                            windowEndMs = windowEndMs,
+                            nowMs = nowMs,
+                            onClick = { onSelectChannel(channel) },
+                            focusRequester = if (index == 0) channelListFocusRequester else null,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EpgTopBar(
+    player: Player?,
+    currentChannel: Channel?,
+    currentProgramme: Programme?,
+    nowMs: Long,
+    timeFmt: SimpleDateFormat,
+    onToggleFavorite: () -> Unit,
+    onClose: () -> Unit,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(160.dp)
+            .background(EpgColors.Surface)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .width(244.dp)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color.Black)
+                .border(BorderStroke(2.dp, EpgColors.Accent.copy(alpha = 0.6f)), RoundedCornerShape(8.dp))
+        ) {
+            if (player != null) {
+                PlayerSurface(player = player, surfaceType = SURFACE_TYPE_TEXTURE_VIEW, modifier = Modifier.fillMaxSize())
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
+            if (currentProgramme != null) {
+                Text(currentProgramme.title, color = EpgColors.TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = TvFonts.Body, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val timeRange = remember(currentProgramme.start, currentProgramme.end) {
+                    "${timeFmt.format(Date(currentProgramme.start))} \u2014 ${timeFmt.format(Date(currentProgramme.end))}"
+                }
+                val remainingMin = ((currentProgramme.end - nowMs) / 60_000L).coerceAtLeast(0L)
+                val progress = ((nowMs - currentProgramme.start).toFloat() / (currentProgramme.end - currentProgramme.start)).coerceIn(0f, 1f)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(timeRange, color = EpgColors.TextSecondary, fontSize = 13.sp, fontFamily = TvFonts.Body)
+                    Box(Modifier.width(100.dp).height(3.dp).clip(RoundedCornerShape(2.dp)).background(EpgColors.Grid)) {
+                        Box(Modifier.fillMaxHeight().fillMaxWidth(progress).background(EpgColors.Accent))
+                    }
+                    Text("$remainingMin min", color = EpgColors.TextMuted, fontSize = 11.sp, fontFamily = TvFonts.Body)
+                }
+                if (currentProgramme.description.isNotBlank()) {
+                    Text(currentProgramme.description, color = EpgColors.TextMuted, fontSize = 12.sp, fontFamily = TvFonts.Body, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            } else {
+                Text(currentChannel?.title.orEmpty(), color = EpgColors.TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = TvFonts.Body, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("No programme information", color = EpgColors.TextMuted, fontSize = 13.sp, fontFamily = TvFonts.Body)
+            }
+        }
+        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            currentChannel?.let { Text(it.category, color = EpgColors.TextSecondary, fontSize = 11.sp, fontFamily = TvFonts.Body) }
+            FocusFrame(onClick = onToggleFavorite, shape = RoundedCornerShape(8.dp), focusedScale = 1f, modifier = Modifier.size(34.dp)) { focused ->
+                Icon(imageVector = if (currentChannel?.favourite == true) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, contentDescription = null, tint = if (focused) TvColors.OnFocus else if (currentChannel?.favourite == true) TvColors.Accent else EpgColors.TextSecondary, modifier = Modifier.align(Alignment.Center).size(18.dp))
+            }
+            FocusFrame(onClick = onClose, shape = RoundedCornerShape(8.dp), focusedScale = 1f, modifier = Modifier.size(34.dp)) { focused ->
+                Icon(Icons.Rounded.Close, null, tint = if (focused) TvColors.OnFocus else EpgColors.TextSecondary, modifier = Modifier.align(Alignment.Center).size(16.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun EpgTimeHeader(windowStartMs: Long, windowEndMs: Long, nowMs: Long, timeFmt: SimpleDateFormat) {
+    val windowDuration = (windowEndMs - windowStartMs).toFloat()
+    val slotMs = 30 * 60_000L
+    val numSlots = ((windowEndMs - windowStartMs) / slotMs).toInt()
+    Row(modifier = Modifier.fillMaxWidth().height(28.dp).background(EpgColors.Header)) {
+        Box(Modifier.width(250.dp).fillMaxHeight().background(EpgColors.Surface), contentAlignment = Alignment.Center) {
+            Text(SimpleDateFormat("EEE, MMM d  h:mm a", Locale.getDefault()).format(Date(nowMs)), color = EpgColors.Accent, fontSize = 10.sp, fontFamily = TvFonts.Body)
+        }
+        Box(Modifier.weight(1f).fillMaxHeight()) {
+            Row(Modifier.fillMaxSize()) {
+                repeat(numSlots) { i ->
+                    Box(Modifier.weight(1f).fillMaxHeight().border(BorderStroke(0.5.dp, EpgColors.Grid)).padding(start = 4.dp), contentAlignment = Alignment.CenterStart) {
+                        Text(timeFmt.format(Date(windowStartMs + i * slotMs)), color = EpgColors.TextSecondary, fontSize = 10.sp, fontFamily = TvFonts.Body)
+                    }
+                }
+            }
+            Canvas(Modifier.fillMaxSize()) {
+                val x = size.width * ((nowMs - windowStartMs) / windowDuration).coerceIn(0f, 1f)
+                drawLine(androidx.compose.ui.graphics.Color(0xFF1EC8F0), Offset(x, 0f), Offset(x, size.height), 2f)
+            }
+        }
+    }
+}
+
+@Composable
+private fun EpgChannelRow(
+    channelNumber: Int,
+    channel: Channel,
+    programme: Programme?,
+    isCurrentChannel: Boolean,
+    windowStartMs: Long,
+    windowEndMs: Long,
+    nowMs: Long,
+    onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
+) {
+    val windowDuration = (windowEndMs - windowStartMs).toFloat()
+    Row(modifier = Modifier.fillMaxWidth().height(50.dp).background(if (isCurrentChannel) EpgColors.CurrentChannelBg else Color.Transparent)) {
+        FocusFrame(
+            onClick = onClick,
+            focusRequester = focusRequester,
+            focusedScale = 1f,
+            shape = RoundedCornerShape(0.dp),
+            modifier = Modifier.width(250.dp).fillMaxHeight()
+        ) { focused ->
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
+                Text("$channelNumber", color = if (isCurrentChannel) EpgColors.Accent else EpgColors.TextMuted, fontSize = 10.sp, fontFamily = TvFonts.Body, modifier = Modifier.width(22.dp))
+                Box(Modifier.size(30.dp).clip(RoundedCornerShape(4.dp)).background(Color.White.copy(alpha = 0.07f)), contentAlignment = Alignment.Center) {
+                    if (!channel.cover.isNullOrBlank()) {
+                        AsyncImage(model = channel.cover, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                    } else {
+                        Icon(Icons.Rounded.Tv, null, tint = EpgColors.TextMuted, modifier = Modifier.size(16.dp))
+                    }
+                }
+                Spacer(Modifier.width(6.dp))
+                Text(channel.title, color = if (focused || isCurrentChannel) EpgColors.TextPrimary else EpgColors.TextSecondary, fontSize = 11.sp, fontFamily = TvFonts.Body, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (isCurrentChannel) Icon(Icons.Rounded.PlayArrow, null, tint = EpgColors.Accent, modifier = Modifier.size(12.dp))
+            }
+        }
+        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+            if (programme != null) {
+                val pastW = ((programme.start - windowStartMs).toFloat() / windowDuration).coerceIn(0f, 1f)
+                val progW = ((programme.end - programme.start).toFloat() / windowDuration).coerceIn(0.01f, 1f - pastW)
+                val futW = (1f - pastW - progW).coerceAtLeast(0f)
+                Row(Modifier.fillMaxSize()) {
+                    if (pastW > 0.001f) Box(Modifier.weight(pastW).fillMaxHeight().background(EpgColors.PastBar))
+                    Box(Modifier.weight(progW).fillMaxHeight().background(if (isCurrentChannel) EpgColors.CurrentProgramBg else EpgColors.ProgramBar).border(BorderStroke(0.5.dp, EpgColors.Grid)).padding(horizontal = 6.dp, vertical = 3.dp)) {
+                        Text(programme.title, color = EpgColors.TextPrimary, fontSize = 11.sp, fontFamily = TvFonts.Body, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                    if (futW > 0.001f) Box(Modifier.weight(futW).fillMaxHeight().background(EpgColors.PastBar))
+                }
+            } else {
+                Box(Modifier.fillMaxSize().background(EpgColors.PastBar).border(BorderStroke(0.5.dp, EpgColors.Grid)).padding(start = 8.dp), contentAlignment = Alignment.CenterStart) {
+                    Text("No information", color = EpgColors.TextMuted, fontSize = 11.sp, fontFamily = TvFonts.Body)
+                }
+            }
+            Canvas(Modifier.fillMaxSize()) {
+                val x = size.width * ((nowMs - windowStartMs).toFloat() / windowDuration).coerceIn(0f, 1f)
+                drawLine(androidx.compose.ui.graphics.Color(0xFF1EC8F0), Offset(x, 0f), Offset(x, size.height), 3f)
+            }
+        }
+    }
+}
+
+@Composable
+private fun EpgCategoriesPanel(
+    state: TvUiState,
+    focusRequester: FocusRequester,
+    onSelectCategory: (String?) -> Unit,
+    onNavigateLeft: () -> Unit,
+) {
+    val allCategories = remember(state.categories) {
+        buildList {
+            add(TvUiState.CATEGORY_FAVORITES to "\u2605  Favorites")
+            add(TvUiState.CATEGORY_ALL to "All channels")
+            state.categories.filter { it != TvUiState.CATEGORY_FAVORITES && it != TvUiState.CATEGORY_ALL }.sorted().forEach { add(it to it) }
+        }
+    }
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+        contentPadding = PaddingValues(vertical = 8.dp, horizontal = 8.dp),
+        modifier = Modifier.width(220.dp).fillMaxHeight().background(EpgColors.Surface)
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) { onNavigateLeft(); true } else false
+            }
+            .focusGroup()
+    ) {
+        itemsIndexed(allCategories, key = { _, it -> it.first }) { index, (key, label) ->
+            val isSelected = when {
+                state.selectedCategory == null && key == TvUiState.CATEGORY_ALL -> true
+                else -> state.selectedCategory == key
+            }
+            FocusFrame(
+                onClick = { onSelectCategory(if (key == TvUiState.CATEGORY_ALL) null else key) },
+                selected = isSelected, focusRequester = if (index == 0) focusRequester else null,
+                focusedScale = 1f, shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()
+            ) { focused ->
+                Text(label, color = if (focused || isSelected) TvColors.OnFocus else EpgColors.TextPrimary, fontSize = 13.sp, fontFamily = TvFonts.Body, fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun EpgMainMenuPanel(
+    focusRequester: FocusRequester,
+    onNavigateToSearch: () -> Unit,
+    onNavigateToTV: () -> Unit,
+    onNavigateToFavorites: () -> Unit,
+    onNavigateToSettings: () -> Unit,
+) {
+    data class MenuItem(val icon: ImageVector, val label: String, val action: () -> Unit)
+    val items = listOf(
+        MenuItem(Icons.Rounded.Search, "Search", onNavigateToSearch),
+        MenuItem(Icons.Rounded.Tv, "TV", onNavigateToTV),
+        MenuItem(Icons.Rounded.Favorite, "Favorites", onNavigateToFavorites),
+        MenuItem(Icons.Rounded.Settings, "Settings", onNavigateToSettings),
+    )
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        contentPadding = PaddingValues(vertical = 16.dp, horizontal = 8.dp),
+        modifier = Modifier.width(160.dp).fillMaxHeight().background(EpgColors.Header).focusGroup()
+    ) {
+        itemsIndexed(items) { index, item ->
+            FocusFrame(onClick = item.action, focusRequester = if (index == 0) focusRequester else null, focusedScale = 1f, shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) { focused ->
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                    Icon(item.icon, null, tint = if (focused) TvColors.OnFocus else EpgColors.TextPrimary, modifier = Modifier.size(20.dp))
+                    Text(item.label, color = if (focused) TvColors.OnFocus else EpgColors.TextPrimary, fontSize = 13.sp, fontFamily = TvFonts.Body, fontWeight = FontWeight.Medium)
                 }
             }
         }

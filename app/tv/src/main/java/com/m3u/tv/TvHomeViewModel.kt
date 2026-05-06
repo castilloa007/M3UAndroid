@@ -39,6 +39,7 @@ data class TvUiState(
     val loadingChannels: Boolean = false,
     val selectedCategory: String? = null,
     val currentProgramme: Programme? = null,
+    val channelProgrammes: Map<Int, Programme?> = emptyMap(),
 ) {
     val channelCount: Int get() = counts.values.sum()
     val heroChannel: Channel? get() = recent ?: channels.firstOrNull()
@@ -202,6 +203,16 @@ class TvHomeViewModel @Inject constructor(
                 }
                 _state.update { it.copy(currentProgramme = programme) }
             }
+        }
+    }
+
+    fun loadEpgData() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val channels = state.value.visibleChannels
+            val programmes = channels.associate { ch ->
+                ch.id to programmeRepository.getProgrammeCurrently(ch.id)
+            }
+            _state.update { it.copy(channelProgrammes = programmes) }
         }
     }
 

@@ -74,10 +74,15 @@ fun App(
         }
     }
 
+    // Load EPG programme data when EPG overlay opens
+    LaunchedEffect(surface) {
+        if (surface == TvSurface.Epg) viewModel.loadEpgData()
+    }
+
     BackHandler {
         when (surface) {
-            TvSurface.Player -> surface = TvSurface.Guide
-            TvSurface.Guide -> closePlayer()
+            TvSurface.Player -> surface = TvSurface.Epg
+            TvSurface.Epg -> closePlayer()
             else -> onBackPressed()
         }
     }
@@ -126,7 +131,7 @@ fun App(
         }
 
         AnimatedVisibility(
-            visible = surface == TvSurface.Player || surface == TvSurface.Guide,
+            visible = surface == TvSurface.Player || surface == TvSurface.Epg,
             enter = fadeIn(),
             exit = fadeOut()
         ) {
@@ -136,27 +141,35 @@ fun App(
                 isPlaying = isPlaying,
                 playbackState = playbackState,
                 onPlayPause = { viewModel.pauseOrContinue(!isPlaying) },
-                onBack = { surface = TvSurface.Guide },
+                onBack = { surface = TvSurface.Epg },
+                onOpenEpg = { surface = TvSurface.Epg; viewModel.loadEpgData() },
                 onClose = closePlayer
             )
         }
 
         AnimatedVisibility(
-            visible = surface == TvSurface.Guide,
+            visible = surface == TvSurface.Epg,
             enter = slideInVertically { it },
             exit = slideOutVertically { it }
         ) {
-            EpgOverlayScreen(
+            EpgGridScreen(
                 player = player,
                 currentChannel = currentChannel,
                 currentProgramme = state.currentProgramme,
                 channels = state.visibleChannels,
+                channelProgrammes = state.channelProgrammes,
+                state = state,
                 onSelectChannel = {
                     viewModel.play(it)
                     surface = TvSurface.Player
                 },
+                onSelectCategory = viewModel::selectCategory,
                 onToggleFavorite = viewModel::toggleFavorite,
-                onClose = closePlayer
+                onClose = closePlayer,
+                onNavigateToTV = { surface = TvSurface.Browse; destination = TvDestination.Home },
+                onNavigateToFavorites = { surface = TvSurface.Browse; destination = TvDestination.Favorites },
+                onNavigateToSettings = { surface = TvSurface.Browse; destination = TvDestination.Status },
+                onNavigateToSearch = { surface = TvSurface.Browse; destination = TvDestination.Home },
             )
         }
 
