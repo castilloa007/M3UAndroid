@@ -64,6 +64,16 @@ fun App(
         }
     }
 
+    // Auto-play last watched channel on first launch
+    var autoPlayDone by remember { mutableStateOf(false) }
+    LaunchedEffect(state.recent) {
+        if (!autoPlayDone && state.recent != null && surface == TvSurface.Browse) {
+            autoPlayDone = true
+            viewModel.play(state.recent!!)
+            surface = TvSurface.Player
+        }
+    }
+
     BackHandler {
         when (surface) {
             TvSurface.Player -> surface = TvSurface.Guide
