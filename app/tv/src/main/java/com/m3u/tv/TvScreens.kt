@@ -78,6 +78,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
@@ -148,7 +149,23 @@ fun EpgGridScreen(
     }
     LaunchedEffect(Unit) { yield(); runCatching { channelListFocusRequester.requestFocus() } }
 
-    Box(modifier = Modifier.fillMaxSize().background(EpgColors.Background).focusGroup()) {
+    Box(modifier = Modifier.fillMaxSize().background(EpgColors.Background).focusGroup()
+        .onPreviewKeyEvent { event ->
+            if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
+                when (epgPanel) {
+                    EpgPanel.Grid -> { epgPanel = EpgPanel.Categories; true }
+                    EpgPanel.Categories -> { epgPanel = EpgPanel.MainMenu; true }
+                    EpgPanel.MainMenu -> false
+                }
+            } else if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) {
+                when (epgPanel) {
+                    EpgPanel.MainMenu -> { epgPanel = EpgPanel.Categories; true }
+                    EpgPanel.Categories -> { epgPanel = EpgPanel.Grid; true }
+                    EpgPanel.Grid -> false
+                }
+            } else false
+        }
+    ) {
         Row(modifier = Modifier.fillMaxSize()) {
 
             // Main menu panel
@@ -196,12 +213,6 @@ fun EpgGridScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .onKeyEvent { event ->
-                            if (event.type == KeyEventType.KeyDown &&
-                                event.key == Key.DirectionLeft &&
-                                epgPanel == EpgPanel.Grid
-                            ) { epgPanel = EpgPanel.Categories; true } else false
-                        }
                         .focusGroup()
                 ) {
                     itemsIndexed(channels, key = { _, ch -> ch.id }) { index, channel ->

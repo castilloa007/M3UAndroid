@@ -208,6 +208,17 @@ class TvHomeViewModel @Inject constructor(
 
     fun loadEpgData() {
         viewModelScope.launch(Dispatchers.IO) {
+            // First refresh EPG from network if stale
+            val playlistUrl = state.value.selectedPlaylist?.url
+            if (playlistUrl != null) {
+                runCatching {
+                    programmeRepository.checkOrRefreshProgrammesOrThrow(
+                        playlistUrl,
+                        ignoreCache = false
+                    ).collect {}
+                }
+            }
+            // Then query current programmes for all visible channels
             val channels = state.value.visibleChannels
             val programmes = channels.associate { ch ->
                 ch.id to programmeRepository.getProgrammeCurrently(ch.id)
