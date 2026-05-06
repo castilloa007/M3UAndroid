@@ -110,18 +110,26 @@ internal class ProgrammeRepositoryImpl @Inject constructor(
 
     override suspend fun getProgrammeCurrently(channelId: Int): Programme? {
         val channel = channelDao.get(channelId) ?: return null
-        val relationId = channel.relationId ?: return null
         val playlist = playlistDao.get(channel.playlistUrl) ?: return null
 
         val epgUrls = playlist.epgUrlsOrXtreamXmlUrl()
         if (epgUrls.isEmpty()) return null
 
         val time = Clock.System.now().toEpochMilliseconds()
-        return programmeDao.getCurrentByEpgUrlsAndRelationId(
-            epgUrls = epgUrls,
-            relationId = relationId,
-            time = time
-        )
+        val relationIds = buildList {
+            channel.relationId?.takeIf { it.isNotBlank() }?.let(::add)
+            channel.title.takeIf { it.isNotBlank() }?.let(::add)
+        }.distinct()
+        if (relationIds.isEmpty()) return null
+
+        relationIds.forEach { relationId ->
+            programmeDao.getCurrentByEpgUrlsAndRelationId(
+                epgUrls = epgUrls,
+                relationId = relationId,
+                time = time
+            )?.let { return it }
+        }
+        return null
     }
 
     private fun checkOrRefreshProgrammesOrThrowImpl(
