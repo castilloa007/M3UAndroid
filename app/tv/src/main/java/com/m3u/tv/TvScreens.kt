@@ -98,6 +98,7 @@ import com.m3u.data.database.model.Playlist
 import com.m3u.data.database.model.Programme
 import com.m3u.i18n.R.string
 import androidx.activity.compose.BackHandler
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.yield
 import androidx.media3.common.Player
 import androidx.media3.ui.compose.PlayerSurface
@@ -140,6 +141,7 @@ fun EpgGridScreen(
     }
     LaunchedEffect(epgPanel) {
         yield()
+        if (epgPanel != EpgPanel.Grid) delay(80)
         when (epgPanel) {
             EpgPanel.Grid -> runCatching { channelListFocusRequester.requestFocus() }
             EpgPanel.Categories -> runCatching { categoriesFocusRequester.requestFocus() }
@@ -168,11 +170,7 @@ fun EpgGridScreen(
         Row(modifier = Modifier.fillMaxSize()) {
 
             // Main menu panel
-            AnimatedVisibility(
-                visible = epgPanel == EpgPanel.MainMenu,
-                enter = slideInHorizontally { -it } + fadeIn(),
-                exit = slideOutHorizontally { -it } + fadeOut(),
-            ) {
+            if (epgPanel == EpgPanel.MainMenu) {
                 EpgMainMenuPanel(
                     focusRequester = mainMenuFocusRequester,
                     onNavigateToSearch = onNavigateToSearch,
@@ -183,11 +181,7 @@ fun EpgGridScreen(
             }
 
             // Categories panel
-            AnimatedVisibility(
-                visible = epgPanel == EpgPanel.Categories || epgPanel == EpgPanel.MainMenu,
-                enter = slideInHorizontally { -it } + fadeIn(),
-                exit = slideOutHorizontally { -it } + fadeOut(),
-            ) {
+            if (epgPanel == EpgPanel.Categories || epgPanel == EpgPanel.MainMenu) {
                 EpgCategoriesPanel(
                     state = state,
                     focusRequester = categoriesFocusRequester,
